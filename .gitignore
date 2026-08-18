@@ -1,0 +1,24 @@
+# Dependências
+node_modules
+.pnpm-store
+
+# Arquivos de Build
+.next/
+dist/
+build/
+.turbo
+
+# Variáveis de Ambiente (Segurança)
+.env
+.env.local
+.env.production
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db

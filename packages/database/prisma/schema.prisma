@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modelos do LavaGo
+
+enum UserRole {
+  CLIENT
+  OWNER
+  ADMIN
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  email     String    @unique
+  password  String
+  phone     String?
+  role      UserRole  @default(CLIENT)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  carWashes Review[]
+
+  @@map("users")
+}
+
+model CarWash {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  address     String
+  city        String
+  state       String
+  latitude    Float
+  longitude   Float
+  phone       String?
+  openHours   String?
+  priceRange  String?  // Ex: "$$", "$$$"
+  coverImage  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reviews     Review[]
+
+  @@map("car_washes")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int      // 1 a 5 estrelas
+  comment   String?
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  carWashId String
+  carWash   CarWash  @relation(fields: [carWashId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
