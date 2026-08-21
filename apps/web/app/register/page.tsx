@@ -1,0 +1,191 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import {
+  Sparkles,
+  Mail,
+  Lock,
+  User,
+  Phone,
+  ArrowRight,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+
+export default function RegisterPage() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [role, setRole] = useState<"CLIENT" | "OWNER">("CLIENT");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log({ name, email, phone, password, role });
+  };
+
+  return (
+    <div className="min-h-screen bg-surface-background flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
+      {/* Glow de fundo */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-brand-primary/15 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Logo */}
+      <Link href="/" className="flex items-center gap-2 mb-8 z-10">
+        <div className="h-10 w-10 rounded-xl bg-brand-primary flex items-center justify-center shadow-lg shadow-brand-primary/30">
+          <Sparkles className="h-5 w-5 text-white" />
+        </div>
+        <span className="font-heading font-bold text-2xl tracking-tight text-text-primary">
+          Lava<span className="text-brand-primary">Go</span>
+        </span>
+      </Link>
+
+      {/* Card do Formulário */}
+      <div className="w-full max-w-md bg-surface-card border border-surface-border rounded-2xl p-6 sm:p-8 shadow-2xl z-10 space-y-6">
+        <div className="text-center space-y-1.5">
+          <h1 className="font-heading text-2xl font-bold text-text-primary">
+            Criar sua conta
+          </h1>
+          <p className="text-xs sm:text-sm text-text-secondary">
+            Junte-se à maior rede de estética automotiva
+          </p>
+        </div>
+
+        {/* Toggle de Tipo de Conta */}
+        <div className="grid grid-cols-2 bg-surface-input border border-surface-border p-1 rounded-xl text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setRole("CLIENT")}
+            className={`py-2 rounded-lg transition-all ${
+              role === "CLIENT"
+                ? "bg-brand-primary text-white shadow-sm shadow-brand-primary/20"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            Sou Cliente
+          </button>
+          <button
+            type="button"
+            onClick={() => setRole("OWNER")}
+            className={`py-2 rounded-lg transition-all ${
+              role === "OWNER"
+                ? "bg-brand-primary text-white shadow-sm shadow-brand-primary/20"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            Tenho Lava-Jato
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* Nome */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-text-secondary">
+              {role === "OWNER"
+                ? "Nome do Proprietário / Responsável"
+                : "Nome Completo"}
+            </label>
+            <div className="relative">
+              <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: Carlos Silva"
+                className="w-full bg-surface-input border border-surface-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* E-mail */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-text-secondary">
+              E-mail
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seuemail@exemplo.com"
+                className="w-full bg-surface-input border border-surface-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Telefone / WhatsApp */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-text-secondary">
+              WhatsApp / Telefone
+            </label>
+            <div className="relative">
+              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(21) 99999-9999"
+                className="w-full bg-surface-input border border-surface-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Senha */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-text-secondary">
+              Senha de acesso
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                className="w-full bg-surface-input border border-surface-border rounded-xl pl-10 pr-10 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Botão Registrar */}
+          <button
+            type="submit"
+            className="w-full bg-brand-primary hover:bg-brand-hover text-white font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-primary/20 mt-3"
+          >
+            {role === "OWNER" ? "Cadastrar Estabelecimento" : "Criar Conta"}
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </form>
+
+        {/* Rodapé do Card */}
+        <div className="pt-4 border-t border-surface-border text-center text-xs text-text-secondary">
+          Já possui uma conta?{" "}
+          <Link
+            href="/login"
+            className="text-brand-primary font-semibold hover:underline"
+          >
+            Fazer login
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}

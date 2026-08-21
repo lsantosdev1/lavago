@@ -76,12 +76,18 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="text-sm font-medium text-text-secondary hover:text-text-primary px-3 py-2 transition-colors">
+            <Link
+              href="/register"
+              className="text-sm font-medium text-text-secondary hover:text-text-primary px-3 py-2 transition-colors"
+            >
               Sou Parceiro
-            </button>
-            <button className="text-sm font-semibold bg-brand-primary hover:bg-brand-hover text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-brand-primary/20">
+            </Link>
+            <Link
+              href="/login"
+              className="text-sm font-semibold bg-brand-primary hover:bg-brand-hover text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-brand-primary/20"
+            >
               Entrar
-            </button>
+            </Link>
           </div>
         </div>
       </header>
