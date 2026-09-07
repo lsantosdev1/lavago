@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -15,6 +15,11 @@ import {
   Share2,
   CheckCircle2,
   Sparkles,
+  X,
+  Car,
+  Calendar,
+  DollarSign,
+  Check,
 } from "lucide-react";
 
 const mockCarWashDetails = {
@@ -41,7 +46,8 @@ const mockCarWashDetails = {
       name: "Lavagem Técnica Detalhada",
       description:
         "Limpeza de chassis, caixas de roda, remoção de piche e acabamento com cera líquida.",
-      price: "R$ 90,00",
+      priceNumber: 90,
+      priceFormatted: "R$ 90,00",
       duration: "1h 15min",
     },
     {
@@ -49,7 +55,8 @@ const mockCarWashDetails = {
       name: "Higienização Interna Completa",
       description:
         "Lavagem a seco de bancos, teto, carpetes e esterilização com ozônio.",
-      price: "R$ 220,00",
+      priceNumber: 220,
+      priceFormatted: "R$ 220,00",
       duration: "2h 30min",
     },
     {
@@ -57,7 +64,8 @@ const mockCarWashDetails = {
       name: "Polimento Técnico & Espelhamento",
       description:
         "Correção de verniz, remoção de micro-riscos e selagem de alto brilho.",
-      price: "R$ 450,00",
+      priceNumber: 450,
+      priceFormatted: "R$ 450,00",
       duration: "4h 00min",
     },
     {
@@ -65,7 +73,8 @@ const mockCarWashDetails = {
       name: "Vitrificação de Pintura (Ceramic Coating)",
       description:
         "Proteção nanométrica contra raios UV e contaminantes com durabilidade de até 3 anos.",
-      price: "R$ 890,00",
+      priceNumber: 890,
+      priceFormatted: "R$ 890,00",
       duration: "1 dia",
     },
   ],
@@ -94,21 +103,85 @@ const mockCarWashDetails = {
   ],
 };
 
+const vehicleTypes = [
+  { id: "hatch", name: "Hatch / Compacto", icon: "🚗" },
+  { id: "sedan", name: "Sedan / Manteve", icon: "🚘" },
+  { id: "suv", name: "SUV / Pick-up", icon: "🚙" },
+  { id: "moto", name: "Motocicleta", icon: "🏍️" },
+];
+
 export default function CarWashDetailPage() {
   const data = mockCarWashDetails;
   const [isFavorite, setIsFavorite] = useState(false);
-  const [selectedService, setSelectedService] = useState<string | null>(null);
+
+  // Estado do Modal de Agendamento
+  const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState("hatch");
+  const [selectedServices, setSelectedServices] = useState<string[]>(["s1"]);
+  const [bookingDate, setBookingDate] = useState("");
+  const [bookingTime, setBookingTime] = useState("09:00");
 
   // Estado para nova avaliação
   const [userRating, setUserRating] = useState(5);
   const [userComment, setUserComment] = useState("");
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
 
+  // Cálculo do valor total e seleção de serviços
+  const toggleServiceSelection = (serviceId: string) => {
+    setSelectedServices((prev) =>
+      prev.includes(serviceId)
+        ? prev.filter((id) => id !== serviceId)
+        : [...prev, serviceId],
+    );
+  };
+
+  const selectedServicesList = useMemo(() => {
+    return data.services.filter((s) => selectedServices.includes(s.id));
+  }, [selectedServices]);
+
+  const totalPrice = useMemo(() => {
+    return selectedServicesList.reduce(
+      (acc, curr) => acc + curr.priceNumber,
+      0,
+    );
+  }, [selectedServicesList]);
+
   const handleReviewSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!userComment.trim()) return;
     setReviewSubmitted(true);
     setUserComment("");
+  };
+
+  // Gerar mensagem do WhatsApp e redirecionar
+  const handleConfirmBookingWhatsApp = () => {
+    const vehicleObj = vehicleTypes.find((v) => v.id === selectedVehicle);
+    const servicesText = selectedServicesList
+      .map((s) => `• ${s.name} (${s.priceFormatted})`)
+      .join("\n");
+
+    const formattedDate = bookingDate
+      ? new Date(bookingDate + "T00:00:00").toLocaleDateString("pt-BR")
+      : "A definir";
+
+    const message = `Olá! Gostaria de agendar um serviço pelo *LavaGo*:
+
+🏢 *Estabelecimento:* ${data.name}
+🚗 *Veículo:* ${vehicleObj?.icon} ${vehicleObj?.name}
+
+🧼 *Serviços Selecionados:*
+${servicesText}
+
+📅 *Data Pretendida:* ${formattedDate}
+⏰ *Horário:* ${bookingTime}
+
+💰 *Valor Total Estimado:* R$ ${totalPrice.toFixed(2).replace(".", ",")}
+
+Aguardando confirmação de disponibilidade!`;
+
+    const whatsappUrl = `https://wa.me/${data.whatsapp}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, "_blank");
+    setIsBookingOpen(false);
   };
 
   return (
@@ -178,7 +251,7 @@ export default function CarWashDetailPage() {
 
         {/* Layout de Duas Colunas */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Coluna Principal (Info + Serviços + Reviews) */}
+          {/* Coluna Principal */}
           <div className="lg:col-span-8 space-y-8">
             {/* Título & Informações Principais */}
             <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-4">
@@ -232,43 +305,33 @@ export default function CarWashDetailPage() {
               </h2>
 
               <div className="space-y-3">
-                {data.services.map((service) => {
-                  const isSelected = selectedService === service.id;
-                  return (
-                    <div
-                      key={service.id}
-                      onClick={() =>
-                        setSelectedService(isSelected ? null : service.id)
-                      }
-                      className={`bg-surface-card hover:bg-surface-cardHover border rounded-2xl p-5 transition-all cursor-pointer shadow-md ${
-                        isSelected
-                          ? "border-brand-primary ring-1 ring-brand-primary bg-surface-cardHover"
-                          : "border-surface-border"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <h3 className="font-heading font-semibold text-base text-text-primary">
-                            {service.name}
-                          </h3>
-                          <p className="text-xs text-text-secondary">
-                            {service.description}
-                          </p>
-                          <span className="inline-flex items-center gap-1 text-[11px] text-text-muted mt-2">
-                            <Clock className="h-3 w-3" /> Duração aprox.:{" "}
-                            {service.duration}
-                          </span>
-                        </div>
+                {data.services.map((service) => (
+                  <div
+                    key={service.id}
+                    className="bg-surface-card hover:bg-surface-cardHover border border-surface-border rounded-2xl p-5 transition-all shadow-md"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <h3 className="font-heading font-semibold text-base text-text-primary">
+                          {service.name}
+                        </h3>
+                        <p className="text-xs text-text-secondary">
+                          {service.description}
+                        </p>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-text-muted mt-2">
+                          <Clock className="h-3 w-3" /> Duração aprox.:{" "}
+                          {service.duration}
+                        </span>
+                      </div>
 
-                        <div className="text-right shrink-0">
-                          <span className="font-heading font-bold text-lg text-text-primary">
-                            {service.price}
-                          </span>
-                        </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-heading font-bold text-lg text-text-primary">
+                          {service.priceFormatted}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -381,15 +444,13 @@ export default function CarWashDetailPage() {
               </h3>
 
               <div className="space-y-2.5">
-                <a
-                  href={`https://wa.me/${data.whatsapp}`}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  onClick={() => setIsBookingOpen(true)}
                   className="w-full bg-brand-accent hover:bg-emerald-600 text-white font-medium py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
                 >
                   <MessageCircle className="h-4 w-4" />
                   Agendar pelo WhatsApp
-                </a>
+                </button>
 
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
@@ -436,6 +497,155 @@ export default function CarWashDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* MODAL INTERATIVO DE AGENDAMENTO */}
+      {isBookingOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface-card border border-surface-border rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-5 p-6 relative">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between border-b border-surface-border pb-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-brand-accent" />
+                <h3 className="font-heading font-bold text-lg text-text-primary">
+                  Montar Agendamento
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsBookingOpen(false)}
+                className="p-1 text-text-muted hover:text-text-primary rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* 1. Seleção de Veículo */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">
+                1. Tipo de Veículo
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {vehicleTypes.map((v) => {
+                  const isSelected = selectedVehicle === v.id;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setSelectedVehicle(v.id)}
+                      className={`p-3 rounded-xl border text-xs font-medium flex items-center gap-2 transition-all ${
+                        isSelected
+                          ? "border-brand-primary bg-brand-primary/10 text-text-primary font-semibold"
+                          : "border-surface-border bg-surface-input text-text-secondary hover:text-text-primary"
+                      }`}
+                    >
+                      <span className="text-base">{v.icon}</span>
+                      <span>{v.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. Seleção de Serviços */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">
+                2. Selecione os Serviços
+              </label>
+              <div className="space-y-2">
+                {data.services.map((s) => {
+                  const isSelected = selectedServices.includes(s.id);
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => toggleServiceSelection(s.id)}
+                      className={`p-3 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${
+                        isSelected
+                          ? "border-brand-accent bg-brand-accent/10 text-text-primary"
+                          : "border-surface-border bg-surface-input text-text-secondary hover:text-text-primary"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className={`h-4 w-4 rounded-md border flex items-center justify-center transition-colors ${
+                            isSelected
+                              ? "bg-brand-accent border-brand-accent text-white"
+                              : "border-surface-border"
+                          }`}
+                        >
+                          {isSelected && (
+                            <Check className="h-3 w-3 stroke-[3]" />
+                          )}
+                        </div>
+                        <span className="font-medium">{s.name}</span>
+                      </div>
+                      <span className="font-semibold text-text-primary">
+                        {s.priceFormatted}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. Data e Horário */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">
+                3. Data e Horário Pretendidos
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="date"
+                  value={bookingDate}
+                  onChange={(e) => setBookingDate(e.target.value)}
+                  className="bg-surface-input border border-surface-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-primary"
+                />
+                <select
+                  value={bookingTime}
+                  onChange={(e) => setBookingTime(e.target.value)}
+                  className="bg-surface-input border border-surface-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-primary"
+                >
+                  {[
+                    "08:00",
+                    "09:00",
+                    "10:00",
+                    "11:00",
+                    "13:00",
+                    "14:00",
+                    "15:00",
+                    "16:00",
+                    "17:00",
+                  ].map((time) => (
+                    <option key={time} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Resumo do Total & Botão de Confirmação */}
+            <div className="pt-3 border-t border-surface-border space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-text-secondary font-medium">
+                  Total Estimado:
+                </span>
+                <span className="font-heading font-bold text-xl text-brand-accent">
+                  R$ {totalPrice.toFixed(2).replace(".", ",")}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                disabled={selectedServices.length === 0}
+                onClick={handleConfirmBookingWhatsApp}
+                className="w-full bg-brand-accent hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Enviar Solicitação no WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
