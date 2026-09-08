@@ -1,19 +1,20 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   Search,
   MapPin,
   Star,
-  ShieldCheck,
   Sparkles,
   Clock,
   ListFilter,
   Map as MapIcon,
   X,
+  Loader2,
 } from "lucide-react";
+import { getCarWashes } from "@/lib/api";
 
 // Carregamento dinâmico do Mapa para evitar SSR (Window is not defined no Leaflet)
 const Map = dynamic(() => import("../components/Map"), {
@@ -25,74 +26,18 @@ const Map = dynamic(() => import("../components/Map"), {
   ),
 });
 
-interface CarWash {
+interface ApiCarWash {
   id: string;
   name: string;
   tag: string;
-  rating: number;
-  reviewsCount: number;
-  distance: string;
+  description?: string;
   address: string;
-  status: string;
-  price: string;
-  lat: number;
-  lng: number;
+  latitude: number;
+  longitude: number;
+  whatsapp: string;
+  isOpen: boolean;
+  reviews?: { rating: number }[];
 }
-
-const mockWashes: CarWash[] = [
-  {
-    id: "1",
-    name: "Auto Spa Detailing Prime",
-    tag: "Estética Premium",
-    rating: 4.9,
-    reviewsCount: 128,
-    distance: "1.2 km",
-    address: "Av. das Américas, 4200 - Barra",
-    status: "Aberto agora",
-    price: "$$$",
-    lat: -23.0003,
-    lng: -43.3659,
-  },
-  {
-    id: "2",
-    name: "Studio Car Care Express",
-    tag: "Lavagem & Cera",
-    rating: 4.8,
-    reviewsCount: 94,
-    distance: "2.5 km",
-    address: "Rua Voluntários da Pátria, 150 - Botafogo",
-    status: "Aberto agora",
-    price: "$$",
-    lat: -22.9519,
-    lng: -43.1843,
-  },
-  {
-    id: "3",
-    name: "Elite Wash & Ceramic Coating",
-    tag: "Vitrificação Técnica",
-    rating: 5.0,
-    reviewsCount: 62,
-    distance: "3.8 km",
-    address: "Rua General Polidoro, 74 - Botafogo",
-    status: "Aberto agora",
-    price: "$$$$",
-    lat: -22.9554,
-    lng: -43.1895,
-  },
-  {
-    id: "4",
-    name: "EcoWash Higienização",
-    tag: "Higienização",
-    rating: 4.7,
-    reviewsCount: 45,
-    distance: "4.1 km",
-    address: "Av. Armando Lombardi, 800 - Barra",
-    status: "Aberto agora",
-    price: "$$",
-    lat: -23.0011,
-    lng: -43.3182,
-  },
-];
 
 const categoryFilters = [
   "Todos",
@@ -104,31 +49,61 @@ const categoryFilters = [
 ];
 
 export default function HomePage() {
+  const [carWashes, setCarWashes] = useState<ApiCarWash[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedWashId, setSelectedWashId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [activeTab, setActiveTab] = useState<"list" | "map">("list");
 
-  // Filtro inteligente de lava-jatos por texto e categoria
-  const filteredWashes = useMemo(() => {
-    return mockWashes.filter((wash) => {
-      const query = searchQuery.toLowerCase().trim();
-      const matchesQuery =
-        query === "" ||
-        wash.name.toLowerCase().includes(query) ||
-        wash.address.toLowerCase().includes(query) ||
-        wash.tag.toLowerCase().includes(query);
-
-      let matchesCategory = true;
-      if (selectedCategory === "Aberto Agora") {
-        matchesCategory = wash.status.toLowerCase().includes("aberto");
-      } else if (selectedCategory !== "Todos") {
-        matchesCategory = wash.tag === selectedCategory;
+  // Fetch inicial e reativo da API quando os filtros mudam
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        const data = await getCarWashes(searchQuery, selectedCategory);
+        setCarWashes(data);
+      } catch (error) {
+        console.error("Erro ao carregar lava-jatos da API:", error);
+      } finally {
+        setLoading(false);
       }
+    }
 
-      return matchesQuery && matchesCategory;
-    });
+    // Debounce de 300ms na pesquisa por texto para evitar excesso de requisições
+    const timer = setTimeout(() => {
+      loadData();
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [searchQuery, selectedCategory]);
+
+  // Mapeia os itens vindos da API para o formato esperado pelo layout e pelo Mapa
+  const formattedWashes = useMemo(() => {
+    return carWashes.map((wash) => {
+      const totalReviews = wash.reviews?.length || 0;
+      const avgRating =
+        totalReviews > 0
+          ? (
+              wash.reviews!.reduce((acc, r) => acc + r.rating, 0) / totalReviews
+            ).toFixed(1)
+          : "5.0";
+
+      return {
+        id: wash.id,
+        name: wash.name,
+        tag: wash.tag || "Estética",
+        rating: Number(avgRating),
+        reviewsCount: totalReviews,
+        distance: "2.0 km",
+        address: wash.address,
+        status: wash.isOpen ? "Aberto agora" : "Fechado",
+        price: "$$",
+        lat: wash.latitude,
+        lng: wash.longitude,
+      };
+    });
+  }, [carWashes]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -204,7 +179,7 @@ export default function HomePage() {
                 }`}
               >
                 <ListFilter className="h-3.5 w-3.5" /> Lista (
-                {filteredWashes.length})
+                {formattedWashes.length})
               </button>
               <button
                 type="button"
@@ -251,12 +226,15 @@ export default function HomePage() {
             }`}
           >
             <div className="flex items-center justify-between text-xs text-text-muted font-medium mb-1">
-              <span>
+              <span className="flex items-center gap-2">
                 Exibindo{" "}
                 <strong className="text-text-primary font-semibold">
-                  {filteredWashes.length}
+                  {formattedWashes.length}
                 </strong>{" "}
                 locais encontrados
+                {loading && (
+                  <Loader2 className="h-3 w-3 animate-spin text-brand-primary" />
+                )}
               </span>
               {(searchQuery || selectedCategory !== "Todos") && (
                 <button
@@ -268,8 +246,18 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Empty State */}
-            {filteredWashes.length === 0 ? (
+            {/* Skeleton Loading State */}
+            {loading && formattedWashes.length === 0 ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((n) => (
+                  <div
+                    key={n}
+                    className="bg-surface-card border border-surface-border rounded-2xl p-4 animate-pulse h-36"
+                  />
+                ))}
+              </div>
+            ) : formattedWashes.length === 0 ? (
+              /* Empty State */
               <div className="bg-surface-card border border-surface-border rounded-2xl p-8 text-center space-y-3">
                 <Search className="h-8 w-8 text-text-muted mx-auto" />
                 <h3 className="font-heading font-semibold text-text-primary text-base">
@@ -287,7 +275,7 @@ export default function HomePage() {
                 </button>
               </div>
             ) : (
-              filteredWashes.map((item) => {
+              formattedWashes.map((item) => {
                 const isSelected = selectedWashId === item.id;
                 return (
                   <div
@@ -359,7 +347,7 @@ export default function HomePage() {
             }`}
           >
             <Map
-              items={filteredWashes.map((item) => ({
+              items={formattedWashes.map((item) => ({
                 ...item,
                 latitude: item.lat,
                 longitude: item.lng,

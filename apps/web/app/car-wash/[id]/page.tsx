@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   Star,
@@ -16,108 +17,83 @@ import {
   CheckCircle2,
   Sparkles,
   X,
-  Car,
   Calendar,
-  DollarSign,
   Check,
+  Loader2,
 } from "lucide-react";
+import { getCarWashById } from "@/lib/api";
 
-const mockCarWashDetails = {
-  id: "1",
-  name: "Auto Spa Detailing Prime",
-  tag: "Estética Premium",
-  rating: 4.9,
-  reviewsCount: 128,
-  priceRange: "$$$",
-  status: "Aberto agora",
-  address: "Av. das Américas, 4200 - Barra da Tijuca, Rio de Janeiro - RJ",
-  phone: "(21) 98765-4321",
-  whatsapp: "5521987654321",
-  description:
-    "Centro especializado em estética automotiva de alto padrão. Trabalhamos com produtos importados e técnicas que preservam a integridade da pintura e o acabamento do seu veículo.",
-  images: [
-    "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1601362840469-51e4d8d58785?auto=format&fit=crop&w=600&q=80",
-    "https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&w=600&q=80",
-  ],
-  services: [
-    {
-      id: "s1",
-      name: "Lavagem Técnica Detalhada",
-      description:
-        "Limpeza de chassis, caixas de roda, remoção de piche e acabamento com cera líquida.",
-      priceNumber: 90,
-      priceFormatted: "R$ 90,00",
-      duration: "1h 15min",
-    },
-    {
-      id: "s2",
-      name: "Higienização Interna Completa",
-      description:
-        "Lavagem a seco de bancos, teto, carpetes e esterilização com ozônio.",
-      priceNumber: 220,
-      priceFormatted: "R$ 220,00",
-      duration: "2h 30min",
-    },
-    {
-      id: "s3",
-      name: "Polimento Técnico & Espelhamento",
-      description:
-        "Correção de verniz, remoção de micro-riscos e selagem de alto brilho.",
-      priceNumber: 450,
-      priceFormatted: "R$ 450,00",
-      duration: "4h 00min",
-    },
-    {
-      id: "s4",
-      name: "Vitrificação de Pintura (Ceramic Coating)",
-      description:
-        "Proteção nanométrica contra raios UV e contaminantes com durabilidade de até 3 anos.",
-      priceNumber: 890,
-      priceFormatted: "R$ 890,00",
-      duration: "1 dia",
-    },
-  ],
-  schedules: [
-    { day: "Segunda a Sexta", hours: "08:00 - 18:30" },
-    { day: "Sábado", hours: "08:00 - 16:00" },
-    { day: "Domingo", hours: "Fechado" },
-  ],
-  reviews: [
-    {
-      id: "r1",
-      author: "Rodrigo M.",
-      date: "Há 3 dias",
-      rating: 5,
-      comment:
-        "Serviço impecável! Meu carro parecia zero saindo da vitrificação. Atendimento excelente.",
-    },
-    {
-      id: "r2",
-      author: "Camila P.",
-      date: "Há 1 semana",
-      rating: 5,
-      comment:
-        "A higienização interna eliminou completamente o cheiro de mofo. Super recomendo.",
-    },
-  ],
-};
+interface Service {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  duration: string;
+  active: boolean;
+}
+
+interface Schedule {
+  id: string;
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+  isOpen: boolean;
+}
+
+interface Review {
+  id: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  user?: {
+    name: string;
+  };
+}
+
+interface CarWashDetail {
+  id: string;
+  name: string;
+  tag: string;
+  description?: string;
+  address: string;
+  whatsapp: string;
+  isOpen: boolean;
+  photos: string[];
+  services: Service[];
+  schedules: Schedule[];
+  reviews: Review[];
+}
 
 const vehicleTypes = [
   { id: "hatch", name: "Hatch / Compacto", icon: "🚗" },
-  { id: "sedan", name: "Sedan / Manteve", icon: "🚘" },
+  { id: "sedan", name: "Sedan / Médio", icon: "🚘" },
   { id: "suv", name: "SUV / Pick-up", icon: "🚙" },
   { id: "moto", name: "Motocicleta", icon: "🏍️" },
 ];
 
+const dayNames = [
+  "Domingo",
+  "Segunda-feira",
+  "Terça-feira",
+  "Quarta-feira",
+  "Quinta-feira",
+  "Sexta-feira",
+  "Sábado",
+];
+
 export default function CarWashDetailPage() {
-  const data = mockCarWashDetails;
+  const params = useParams();
+  const id = params?.id as string;
+
+  const [data, setData] = useState<CarWashDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
 
   // Estado do Modal de Agendamento
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState("hatch");
-  const [selectedServices, setSelectedServices] = useState<string[]>(["s1"]);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [bookingDate, setBookingDate] = useState("");
   const [bookingTime, setBookingTime] = useState("09:00");
 
@@ -126,24 +102,56 @@ export default function CarWashDetailPage() {
   const [userComment, setUserComment] = useState("");
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
 
-  // Cálculo do valor total e seleção de serviços
+  // Busca dos dados reais da API
+  useEffect(() => {
+    async function loadDetail() {
+      if (!id) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const responseData = await getCarWashById(id);
+        setData(responseData);
+
+        // Seleciona por padrão o primeiro serviço caso exista
+        if (responseData.services && responseData.services.length > 0) {
+          setSelectedServices([responseData.services[0].id]);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar detalhes do lava-jato:", err);
+        setError(
+          "Não foi possível carregar as informações deste estabelecimento.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadDetail();
+  }, [id]);
+
+  // Cálculo de avaliações e média
+  const avgRating = useMemo(() => {
+    if (!data?.reviews || data.reviews.length === 0) return "5.0";
+    const total = data.reviews.reduce((acc, curr) => acc + curr.rating, 0);
+    return (total / data.reviews.length).toFixed(1);
+  }, [data?.reviews]);
+
+  // Cálculo do valor total dos serviços selecionados
   const toggleServiceSelection = (serviceId: string) => {
     setSelectedServices((prev) =>
       prev.includes(serviceId)
-        ? prev.filter((id) => id !== serviceId)
+        ? prev.filter((item) => item !== serviceId)
         : [...prev, serviceId],
     );
   };
 
   const selectedServicesList = useMemo(() => {
+    if (!data?.services) return [];
     return data.services.filter((s) => selectedServices.includes(s.id));
-  }, [selectedServices]);
+  }, [data?.services, selectedServices]);
 
   const totalPrice = useMemo(() => {
-    return selectedServicesList.reduce(
-      (acc, curr) => acc + curr.priceNumber,
-      0,
-    );
+    return selectedServicesList.reduce((acc, curr) => acc + curr.price, 0);
   }, [selectedServicesList]);
 
   const handleReviewSubmit = (e: React.FormEvent) => {
@@ -153,11 +161,13 @@ export default function CarWashDetailPage() {
     setUserComment("");
   };
 
-  // Gerar mensagem do WhatsApp e redirecionar
+  // Redirecionamento e geração de mensagem formatada para o WhatsApp
   const handleConfirmBookingWhatsApp = () => {
+    if (!data) return;
+
     const vehicleObj = vehicleTypes.find((v) => v.id === selectedVehicle);
     const servicesText = selectedServicesList
-      .map((s) => `• ${s.name} (${s.priceFormatted})`)
+      .map((s) => `• ${s.name} (R$ ${s.price.toFixed(2).replace(".", ",")})`)
       .join("\n");
 
     const formattedDate = bookingDate
@@ -183,6 +193,45 @@ Aguardando confirmação de disponibilidade!`;
     window.open(whatsappUrl, "_blank");
     setIsBookingOpen(false);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-background flex flex-col items-center justify-center text-text-primary gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
+        <p className="text-sm text-text-secondary">
+          Carregando detalhes do lava-jato...
+        </p>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-surface-background flex flex-col items-center justify-center p-4 text-center">
+        <h2 className="font-heading text-xl font-bold text-rose-500 mb-2">
+          Ops! Ocorreu um erro
+        </h2>
+        <p className="text-sm text-text-secondary mb-6">
+          {error || "Lava-jato não encontrado."}
+        </p>
+        <Link
+          href="/"
+          className="bg-brand-primary text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md"
+        >
+          Voltar para a página inicial
+        </Link>
+      </div>
+    );
+  }
+
+  // Fallback para imagens
+  const photos =
+    data.photos && data.photos.length > 0
+      ? data.photos
+      : [
+          "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&w=1200&q=80",
+          "https://images.unsplash.com/photo-1601362840469-51e4d8d58785?auto=format&fit=crop&w=600&q=80",
+        ];
 
   return (
     <div className="min-h-screen bg-surface-background text-text-primary pb-16">
@@ -226,7 +275,7 @@ Aguardando confirmação de disponibilidade!`;
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-2xl overflow-hidden border border-surface-border mb-8 max-h-[420px]">
           <div className="md:col-span-2 h-72 md:h-full relative overflow-hidden group">
             <img
-              src={data.images[0]}
+              src={photos[0]}
               alt={data.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
@@ -234,14 +283,14 @@ Aguardando confirmação de disponibilidade!`;
           <div className="hidden md:grid grid-rows-2 gap-3 h-full">
             <div className="overflow-hidden group">
               <img
-                src={data.images[1]}
+                src={photos[1] || photos[0]}
                 alt={data.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
             </div>
             <div className="overflow-hidden group">
               <img
-                src={data.images[2]}
+                src={photos[2] || photos[0]}
                 alt={data.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
@@ -265,7 +314,7 @@ Aguardando confirmação de disponibilidade!`;
                   </span>
                 </div>
                 <span className="text-sm font-semibold text-text-muted">
-                  {data.priceRange}
+                  $$$
                 </span>
               </div>
 
@@ -276,14 +325,15 @@ Aguardando confirmação de disponibilidade!`;
               <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-text-secondary">
                 <div className="flex items-center gap-1 text-brand-warning font-bold">
                   <Star className="h-4 w-4 fill-brand-warning" />
-                  {data.rating}
+                  {avgRating}
                   <span className="text-text-muted font-normal">
-                    ({data.reviewsCount} avaliações)
+                    ({data.reviews?.length || 0} avaliações)
                   </span>
                 </div>
                 <span>•</span>
                 <span className="flex items-center gap-1 text-brand-accent font-medium">
-                  <Clock className="h-4 w-4" /> {data.status}
+                  <Clock className="h-4 w-4" />{" "}
+                  {data.isOpen ? "Aberto agora" : "Fechado"}
                 </span>
               </div>
 
@@ -292,12 +342,14 @@ Aguardando confirmação de disponibilidade!`;
                 {data.address}
               </p>
 
-              <p className="text-sm text-text-secondary leading-relaxed pt-2">
-                {data.description}
-              </p>
+              {data.description && (
+                <p className="text-sm text-text-secondary leading-relaxed pt-2">
+                  {data.description}
+                </p>
+              )}
             </div>
 
-            {/* Tabela de Serviços */}
+            {/* Tabela de Serviços Reais */}
             <div className="space-y-4">
               <h2 className="font-heading text-xl font-bold text-text-primary flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-brand-primary" />
@@ -305,33 +357,41 @@ Aguardando confirmação de disponibilidade!`;
               </h2>
 
               <div className="space-y-3">
-                {data.services.map((service) => (
-                  <div
-                    key={service.id}
-                    className="bg-surface-card hover:bg-surface-cardHover border border-surface-border rounded-2xl p-5 transition-all shadow-md"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <h3 className="font-heading font-semibold text-base text-text-primary">
-                          {service.name}
-                        </h3>
-                        <p className="text-xs text-text-secondary">
-                          {service.description}
-                        </p>
-                        <span className="inline-flex items-center gap-1 text-[11px] text-text-muted mt-2">
-                          <Clock className="h-3 w-3" /> Duração aprox.:{" "}
-                          {service.duration}
-                        </span>
-                      </div>
+                {data.services && data.services.length > 0 ? (
+                  data.services.map((service) => (
+                    <div
+                      key={service.id}
+                      className="bg-surface-card hover:bg-surface-cardHover border border-surface-border rounded-2xl p-5 transition-all shadow-md"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <h3 className="font-heading font-semibold text-base text-text-primary">
+                            {service.name}
+                          </h3>
+                          {service.description && (
+                            <p className="text-xs text-text-secondary">
+                              {service.description}
+                            </p>
+                          )}
+                          <span className="inline-flex items-center gap-1 text-[11px] text-text-muted mt-2">
+                            <Clock className="h-3 w-3" /> Duração aprox.:{" "}
+                            {service.duration}
+                          </span>
+                        </div>
 
-                      <div className="text-right shrink-0">
-                        <span className="font-heading font-bold text-lg text-text-primary">
-                          {service.priceFormatted}
-                        </span>
+                        <div className="text-right shrink-0">
+                          <span className="font-heading font-bold text-lg text-text-primary">
+                            R$ {service.price.toFixed(2).replace(".", ",")}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-xs text-text-muted">
+                    Nenhum serviço cadastrado.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -339,11 +399,11 @@ Aguardando confirmação de disponibilidade!`;
             <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="font-heading text-xl font-bold text-text-primary">
-                  Avaliações ({data.reviewsCount})
+                  Avaliações ({data.reviews?.length || 0})
                 </h2>
                 <div className="flex items-center gap-1.5 bg-brand-warning/10 text-brand-warning px-3 py-1 rounded-xl text-sm font-bold">
                   <Star className="h-4 w-4 fill-brand-warning" />
-                  {data.rating} / 5.0
+                  {avgRating} / 5.0
                 </div>
               </div>
 
@@ -403,34 +463,40 @@ Aguardando confirmação de disponibilidade!`;
                 )}
               </form>
 
-              {/* Lista de Reviews */}
+              {/* Lista de Reviews Reais */}
               <div className="space-y-4 pt-2">
-                {data.reviews.map((rev) => (
-                  <div
-                    key={rev.id}
-                    className="border-b border-surface-border pb-4 last:border-0 last:pb-0 space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-text-primary">
-                        {rev.author}
-                      </span>
-                      <span className="text-[11px] text-text-muted">
-                        {rev.date}
-                      </span>
+                {data.reviews && data.reviews.length > 0 ? (
+                  data.reviews.map((rev) => (
+                    <div
+                      key={rev.id}
+                      className="border-b border-surface-border pb-4 last:border-0 last:pb-0 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-text-primary">
+                          {rev.user?.name || "Cliente LavaGo"}
+                        </span>
+                        <span className="text-[11px] text-text-muted">
+                          {new Date(rev.createdAt).toLocaleDateString("pt-BR")}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: rev.rating }).map((_, i) => (
+                          <Star
+                            key={i}
+                            className="h-3 w-3 text-brand-warning fill-brand-warning"
+                          />
+                        ))}
+                      </div>
+                      <p className="text-xs text-text-secondary leading-relaxed">
+                        {rev.comment}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: rev.rating }).map((_, i) => (
-                        <Star
-                          key={i}
-                          className="h-3 w-3 text-brand-warning fill-brand-warning"
-                        />
-                      ))}
-                    </div>
-                    <p className="text-xs text-text-secondary leading-relaxed">
-                      {rev.comment}
-                    </p>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-xs text-text-muted">
+                    Ainda não há avaliações cadastradas.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -468,12 +534,12 @@ Aguardando confirmação de disponibilidade!`;
               <div className="pt-4 border-t border-surface-border text-xs text-text-secondary space-y-2">
                 <div className="flex items-center gap-2">
                   <Phone className="h-3.5 w-3.5 text-text-muted" />
-                  <span>{data.phone}</span>
+                  <span>{data.whatsapp}</span>
                 </div>
               </div>
             </div>
 
-            {/* Horários de Funcionamento */}
+            {/* Horários de Funcionamento Reais */}
             <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-3">
               <h3 className="font-heading font-semibold text-sm text-text-primary flex items-center gap-2">
                 <Clock className="h-4 w-4 text-brand-primary" />
@@ -481,17 +547,25 @@ Aguardando confirmação de disponibilidade!`;
               </h3>
 
               <div className="space-y-2 text-xs pt-1">
-                {data.schedules.map((sc, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between text-text-secondary border-b border-surface-border/50 pb-1.5 last:border-0"
-                  >
-                    <span>{sc.day}</span>
-                    <span className="font-medium text-text-primary">
-                      {sc.hours}
-                    </span>
-                  </div>
-                ))}
+                {data.schedules && data.schedules.length > 0 ? (
+                  data.schedules.map((sc) => (
+                    <div
+                      key={sc.id}
+                      className="flex items-center justify-between text-text-secondary border-b border-surface-border/50 pb-1.5 last:border-0"
+                    >
+                      <span>{dayNames[sc.dayOfWeek]}</span>
+                      <span className="font-medium text-text-primary">
+                        {sc.isOpen
+                          ? `${sc.openTime} - ${sc.closeTime}`
+                          : "Fechado"}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-text-muted">
+                    Horários não informados.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -545,44 +619,45 @@ Aguardando confirmação de disponibilidade!`;
               </div>
             </div>
 
-            {/* 2. Seleção de Serviços */}
+            {/* 2. Seleção de Serviços Reais */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">
                 2. Selecione os Serviços
               </label>
               <div className="space-y-2">
-                {data.services.map((s) => {
-                  const isSelected = selectedServices.includes(s.id);
-                  return (
-                    <div
-                      key={s.id}
-                      onClick={() => toggleServiceSelection(s.id)}
-                      className={`p-3 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${
-                        isSelected
-                          ? "border-brand-accent bg-brand-accent/10 text-text-primary"
-                          : "border-surface-border bg-surface-input text-text-secondary hover:text-text-primary"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`h-4 w-4 rounded-md border flex items-center justify-center transition-colors ${
-                            isSelected
-                              ? "bg-brand-accent border-brand-accent text-white"
-                              : "border-surface-border"
-                          }`}
-                        >
-                          {isSelected && (
-                            <Check className="h-3 w-3 stroke-[3]" />
-                          )}
+                {data.services &&
+                  data.services.map((s) => {
+                    const isSelected = selectedServices.includes(s.id);
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => toggleServiceSelection(s.id)}
+                        className={`p-3 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${
+                          isSelected
+                            ? "border-brand-accent bg-brand-accent/10 text-text-primary"
+                            : "border-surface-border bg-surface-input text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`h-4 w-4 rounded-md border flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? "bg-brand-accent border-brand-accent text-white"
+                                : "border-surface-border"
+                            }`}
+                          >
+                            {isSelected && (
+                              <Check className="h-3 w-3 stroke-[3]" />
+                            )}
+                          </div>
+                          <span className="font-medium">{s.name}</span>
                         </div>
-                        <span className="font-medium">{s.name}</span>
+                        <span className="font-semibold text-text-primary">
+                          R$ {s.price.toFixed(2).replace(".", ",")}
+                        </span>
                       </div>
-                      <span className="font-semibold text-text-primary">
-                        {s.priceFormatted}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </div>
 
