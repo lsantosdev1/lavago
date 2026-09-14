@@ -17,6 +17,7 @@ import {
   DollarSign,
   Building2,
 } from "lucide-react";
+import { getPartnerBookings } from "@/lib/api";
 
 interface Schedule {
   id: string;
@@ -24,6 +25,21 @@ interface Schedule {
   openTime: string;
   closeTime: string;
   isOpen: boolean;
+}
+
+interface Booking {
+  id: string;
+  vehicleType: string;
+  services: string[];
+  totalPrice: number;
+  date: string;
+  time: string;
+  status: string;
+  client?: {
+    name: string;
+    email: string;
+    phone?: string;
+  };
 }
 
 const dayNames = [
@@ -41,12 +57,13 @@ export default function PartnerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [partnerData, setPartnerData] = useState<any>(null);
   const [carWash, setCarWash] = useState<any>(null);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<"bookings" | "schedules">(
     "bookings",
   );
   const [isOpenNow, setIsOpenNow] = useState(true);
 
-  // Busca perfil do parceiro logado na API
+  // Busca perfil do parceiro logado na API e os agendamentos do estabelecimento
   useEffect(() => {
     async function loadPartnerProfile() {
       const token = localStorage.getItem("@lavago:token");
@@ -73,11 +90,15 @@ export default function PartnerDashboardPage() {
 
         setCarWash(data.carWash);
         setIsOpenNow(data.carWash.isOpen);
+
+        // Busca a lista de agendamentos reais do banco PostgreSQL
+        const bookingsData = await getPartnerBookings(token);
+        setBookings(bookingsData);
       } catch (err) {
+        console.error("Erro ao carregar dados do parceiro:", err);
         localStorage.removeItem("@lavago:token");
         router.push("/login");
-      }
-      fontFinally: {
+      } finally {
         setLoading(false);
       }
     }
@@ -186,7 +207,7 @@ export default function PartnerDashboardPage() {
                 : "text-text-secondary hover:text-text-primary"
             }`}
           >
-            <Calendar className="h-4 w-4" /> Agendamentos
+            <Calendar className="h-4 w-4" /> Agendamentos ({bookings.length})
           </button>
           <button
             onClick={() => setActiveTab("schedules")}
@@ -200,19 +221,71 @@ export default function PartnerDashboardPage() {
           </button>
         </div>
 
-        {/* Conteúdo da Aba: Agendamentos */}
+        {/* Conteúdo da Aba: Agendamentos Reais */}
         {activeTab === "bookings" && (
           <div className="space-y-4">
-            <div className="bg-surface-card border border-surface-border rounded-2xl p-8 text-center space-y-3">
-              <Calendar className="h-8 w-8 text-text-muted mx-auto" />
-              <h3 className="font-heading font-semibold text-text-primary text-base">
-                Nenhum agendamento pendente
-              </h3>
-              <p className="text-xs text-text-secondary max-w-sm mx-auto">
-                Quando os clientes solicitarem agendamentos pelo aplicativo, os
-                registros aparecerão organizados nesta lista.
-              </p>
-            </div>
+            {bookings.length === 0 ? (
+              <div className="bg-surface-card border border-surface-border rounded-2xl p-8 text-center space-y-3">
+                <Calendar className="h-8 w-8 text-text-muted mx-auto" />
+                <h3 className="font-heading font-semibold text-text-primary text-base">
+                  Nenhum agendamento pendente
+                </h3>
+                <p className="text-xs text-text-secondary max-w-sm mx-auto">
+                  Quando os clientes solicitarem agendamentos pelo aplicativo,
+                  os registros aparecerão organizados nesta lista.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {bookings.map((booking) => (
+                  <div
+                    key={booking.id}
+                    className="bg-surface-card border border-surface-border rounded-2xl p-5 shadow-lg space-y-3"
+                  >
+                    <div className="flex items-center justify-between border-b border-surface-border pb-2">
+                      <span className="text-xs font-bold text-brand-primary">
+                        {booking.vehicleType}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[11px] font-semibold">
+                        {booking.status}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="font-heading font-semibold text-sm text-text-primary">
+                        {booking.client?.name || "Cliente LavaGo"}
+                      </h4>
+                      <p className="text-xs text-text-secondary">
+                        📱 {booking.client?.phone || "Não informado"}
+                      </p>
+                    </div>
+
+                    <div className="text-xs text-text-muted space-y-1 pt-1">
+                      <p>
+                        📅 Data:{" "}
+                        {new Date(booking.date).toLocaleDateString("pt-BR")} às{" "}
+                        {booking.time}
+                      </p>
+                      <p>
+                        🧼 Serviços:{" "}
+                        {Array.isArray(booking.services)
+                          ? booking.services.join(", ")
+                          : booking.services}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-surface-border flex items-center justify-between">
+                      <span className="text-xs text-text-secondary font-medium">
+                        Total:
+                      </span>
+                      <span className="font-heading font-bold text-base text-brand-accent">
+                        R$ {booking.totalPrice.toFixed(2).replace(".", ",")}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

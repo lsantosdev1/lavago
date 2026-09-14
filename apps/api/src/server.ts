@@ -279,28 +279,28 @@ app.get("/car-washes/:id", async (req, res) => {
   }
 });
 
-// 3. Registrar Agendamento
-app.post("/bookings", async (req, res) => {
+// 3. Registrar Agendamento (Persistência no Banco)
+app.post("/bookings", authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const {
-      clientId,
-      carWashId,
-      vehicleType,
-      services,
-      totalPrice,
-      date,
-      time,
-    } = req.body;
+    const { carWashId, vehicleType, services, totalPrice, date, time } =
+      req.body;
+
+    if (!carWashId || !vehicleType || !services || !date || !time) {
+      return res
+        .status(400)
+        .json({ error: "Dados do agendamento incompletos." });
+    }
 
     const booking = await prisma.booking.create({
       data: {
-        clientId,
+        clientId: req.user!.id,
         carWashId,
         vehicleType,
         services,
         totalPrice: parseFloat(totalPrice),
         date: new Date(date),
         time,
+        status: "PENDING",
       },
     });
 
@@ -311,6 +311,36 @@ app.post("/bookings", async (req, res) => {
   }
 });
 
+// 4. Buscar Agendamentos do Parceiro Logado
+app.get("/partner/bookings", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    // Busca o lava-jato do parceiro
+    const carWash = await prisma.carWash.findFirst({
+      where: { ownerId: req.user!.id },
+    });
+
+    if (!carWash) {
+      return res
+        .status(404)
+        .json({ error: "Lava-jato não encontrado para este parceiro." });
+    }
+
+    const bookings = await prisma.booking.findMany({
+      where: { carWashId: carWash.id },
+      include: {
+        client: {
+          select: { name: true, email: true, phone: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json(bookings);
+  } catch (error) {
+    console.error("Erro ao buscar agendamentos do parceiro:", error);
+    return res.status(500).json({ error: "Erro ao buscar agendamentos" });
+  }
+});
 app.listen(port, () => {
   console.log(`🚀 API LavaGo rodando na porta ${port}`);
 });

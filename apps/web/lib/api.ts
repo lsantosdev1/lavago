@@ -57,3 +57,30 @@ export async function createCarWash(data: any, token: string) {
     throw new Error(responseData.error || "Falha ao cadastrar lava-jato");
   return responseData;
 }
+export async function createBooking(bookingData: any, token: string) {
+  const res = await fetch(`${API_URL}/bookings`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(bookingData),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Falha ao registrar agendamento.");
+  return data;
+}
+
+export async function getPartnerBookings(token: string) {
+  const res = await fetch(`${API_URL}/partner/bookings`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Falha ao buscar agendamentos.");
+  return data;
+}

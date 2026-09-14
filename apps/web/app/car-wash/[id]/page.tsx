@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { createBooking } from "@/lib/api";
 import {
   ArrowLeft,
   Star,
@@ -162,19 +163,40 @@ export default function CarWashDetailPage() {
   };
 
   // Redirecionamento e geração de mensagem formatada para o WhatsApp
-  const handleConfirmBookingWhatsApp = () => {
+  const handleConfirmBookingWhatsApp = async () => {
     if (!data) return;
+
+    const token = localStorage.getItem("@lavago:token");
+    if (!token) {
+      alert("Por favor, faça login para realizar um agendamento.");
+      return;
+    }
 
     const vehicleObj = vehicleTypes.find((v) => v.id === selectedVehicle);
     const servicesText = selectedServicesList
       .map((s) => `• ${s.name} (R$ ${s.price.toFixed(2).replace(".", ",")})`)
       .join("\n");
 
-    const formattedDate = bookingDate
-      ? new Date(bookingDate + "T00:00:00").toLocaleDateString("pt-BR")
-      : "A definir";
+    try {
+      // 1. Persiste o agendamento no banco PostgreSQL via API
+      await createBooking(
+        {
+          carWashId: data.id,
+          vehicleType: vehicleObj?.name || selectedVehicle,
+          services: selectedServicesList.map((s) => s.name),
+          totalPrice,
+          date: bookingDate || new Date().toISOString().split("T")[0],
+          time: bookingTime,
+        },
+        token,
+      );
 
-    const message = `Olá! Gostaria de agendar um serviço pelo *LavaGo*:
+      // 2. Abre o WhatsApp com a mensagem pronta
+      const formattedDate = bookingDate
+        ? new Date(bookingDate + "T00:00:00").toLocaleDateString("pt-BR")
+        : "A definir";
+
+      const message = `Olá! Realizei o agendamento pelo *LavaGo*:
 
 🏢 *Estabelecimento:* ${data.name}
 🚗 *Veículo:* ${vehicleObj?.icon} ${vehicleObj?.name}
@@ -187,13 +209,15 @@ ${servicesText}
 
 💰 *Valor Total Estimado:* R$ ${totalPrice.toFixed(2).replace(".", ",")}
 
-Aguardando confirmação de disponibilidade!`;
+Aguardando confirmação!`;
 
-    const whatsappUrl = `https://wa.me/${data.whatsapp}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, "_blank");
-    setIsBookingOpen(false);
+      const whatsappUrl = `https://wa.me/${data.whatsapp}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, "_blank");
+      setIsBookingOpen(false);
+    } catch (err: any) {
+      alert(err.message || "Erro ao registrar o agendamento.");
+    }
   };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-background flex flex-col items-center justify-center text-text-primary gap-3">
