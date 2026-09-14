@@ -84,3 +84,17 @@ export async function getPartnerBookings(token: string) {
   if (!res.ok) throw new Error(data.error || "Falha ao buscar agendamentos.");
   return data;
 }
+export async function createService(serviceData: any, token: string) {
+  const res = await fetch(`${API_URL}/services`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(serviceData),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Falha ao cadastrar serviço.");
+  return data;
+}

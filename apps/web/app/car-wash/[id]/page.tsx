@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { createBooking } from "@/lib/api";
 import {
   ArrowLeft,
   Star,
@@ -22,7 +21,7 @@ import {
   Check,
   Loader2,
 } from "lucide-react";
-import { getCarWashById } from "@/lib/api";
+import { getCarWashById, createBooking } from "@/lib/api";
 
 interface Service {
   id: string;
@@ -113,7 +112,7 @@ export default function CarWashDetailPage() {
         const responseData = await getCarWashById(id);
         setData(responseData);
 
-        // Seleciona por padrão o primeiro serviço caso exista
+        // Seleciona o primeiro serviço disponível por padrão se houver
         if (responseData.services && responseData.services.length > 0) {
           setSelectedServices([responseData.services[0].id]);
         }
@@ -137,7 +136,7 @@ export default function CarWashDetailPage() {
     return (total / data.reviews.length).toFixed(1);
   }, [data?.reviews]);
 
-  // Cálculo do valor total dos serviços selecionados
+  // Seleção e alternância de serviços
   const toggleServiceSelection = (serviceId: string) => {
     setSelectedServices((prev) =>
       prev.includes(serviceId)
@@ -152,7 +151,10 @@ export default function CarWashDetailPage() {
   }, [data?.services, selectedServices]);
 
   const totalPrice = useMemo(() => {
-    return selectedServicesList.reduce((acc, curr) => acc + curr.price, 0);
+    return selectedServicesList.reduce(
+      (acc, curr) => acc + Number(curr.price),
+      0,
+    );
   }, [selectedServicesList]);
 
   const handleReviewSubmit = (e: React.FormEvent) => {
@@ -162,7 +164,7 @@ export default function CarWashDetailPage() {
     setUserComment("");
   };
 
-  // Redirecionamento e geração de mensagem formatada para o WhatsApp
+  // Salva o agendamento no banco e abre o WhatsApp
   const handleConfirmBookingWhatsApp = async () => {
     if (!data) return;
 
@@ -172,13 +174,21 @@ export default function CarWashDetailPage() {
       return;
     }
 
+    if (selectedServicesList.length === 0) {
+      alert("Selecione pelo menos um serviço para agendar.");
+      return;
+    }
+
     const vehicleObj = vehicleTypes.find((v) => v.id === selectedVehicle);
     const servicesText = selectedServicesList
-      .map((s) => `• ${s.name} (R$ ${s.price.toFixed(2).replace(".", ",")})`)
+      .map(
+        (s) =>
+          `• ${s.name} (R$ ${Number(s.price).toFixed(2).replace(".", ",")})`,
+      )
       .join("\n");
 
     try {
-      // 1. Persiste o agendamento no banco PostgreSQL via API
+      // 1. Persiste o agendamento no banco PostgreSQL
       await createBooking(
         {
           carWashId: data.id,
@@ -218,6 +228,7 @@ Aguardando confirmação!`;
       alert(err.message || "Erro ao registrar o agendamento.");
     }
   };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-background flex flex-col items-center justify-center text-text-primary gap-3">
@@ -248,13 +259,11 @@ Aguardando confirmação!`;
     );
   }
 
-  // Fallback para imagens
   const photos =
     data.photos && data.photos.length > 0
       ? data.photos
       : [
           "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&w=1200&q=80",
-          "https://images.unsplash.com/photo-1601362840469-51e4d8d58785?auto=format&fit=crop&w=600&q=80",
         ];
 
   return (
@@ -326,7 +335,6 @@ Aguardando confirmação!`;
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Coluna Principal */}
           <div className="lg:col-span-8 space-y-8">
-            {/* Título & Informações Principais */}
             <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -405,7 +413,8 @@ Aguardando confirmação!`;
 
                         <div className="text-right shrink-0">
                           <span className="font-heading font-bold text-lg text-text-primary">
-                            R$ {service.price.toFixed(2).replace(".", ",")}
+                            R${" "}
+                            {Number(service.price).toFixed(2).replace(".", ",")}
                           </span>
                         </div>
                       </div>
@@ -413,121 +422,15 @@ Aguardando confirmação!`;
                   ))
                 ) : (
                   <p className="text-xs text-text-muted">
-                    Nenhum serviço cadastrado.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Avaliações dos Clientes */}
-            <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="font-heading text-xl font-bold text-text-primary">
-                  Avaliações ({data.reviews?.length || 0})
-                </h2>
-                <div className="flex items-center gap-1.5 bg-brand-warning/10 text-brand-warning px-3 py-1 rounded-xl text-sm font-bold">
-                  <Star className="h-4 w-4 fill-brand-warning" />
-                  {avgRating} / 5.0
-                </div>
-              </div>
-
-              {/* Form de Nova Avaliação */}
-              <form
-                onSubmit={handleReviewSubmit}
-                className="border border-surface-border rounded-xl p-4 bg-surface-input space-y-3"
-              >
-                <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wider">
-                  Deixe sua avaliação
-                </h3>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-text-secondary">Sua nota:</span>
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        type="button"
-                        key={star}
-                        onClick={() => setUserRating(star)}
-                        className="p-1 text-text-muted hover:text-brand-warning transition-colors"
-                      >
-                        <Star
-                          className={`h-4 w-4 ${
-                            star <= userRating
-                              ? "text-brand-warning fill-brand-warning"
-                              : ""
-                          }`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <textarea
-                  rows={3}
-                  value={userComment}
-                  onChange={(e) => setUserComment(e.target.value)}
-                  placeholder="Conte como foi sua experiência com este lava-jato..."
-                  className="w-full bg-surface-card border border-surface-border rounded-xl p-3 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary"
-                />
-
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    className="bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-md shadow-brand-primary/20"
-                  >
-                    Publicar Avaliação
-                  </button>
-                </div>
-
-                {reviewSubmitted && (
-                  <p className="text-xs text-brand-accent flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Avaliação
-                    registrada com sucesso!
-                  </p>
-                )}
-              </form>
-
-              {/* Lista de Reviews Reais */}
-              <div className="space-y-4 pt-2">
-                {data.reviews && data.reviews.length > 0 ? (
-                  data.reviews.map((rev) => (
-                    <div
-                      key={rev.id}
-                      className="border-b border-surface-border pb-4 last:border-0 last:pb-0 space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-xs text-text-primary">
-                          {rev.user?.name || "Cliente LavaGo"}
-                        </span>
-                        <span className="text-[11px] text-text-muted">
-                          {new Date(rev.createdAt).toLocaleDateString("pt-BR")}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: rev.rating }).map((_, i) => (
-                          <Star
-                            key={i}
-                            className="h-3 w-3 text-brand-warning fill-brand-warning"
-                          />
-                        ))}
-                      </div>
-                      <p className="text-xs text-text-secondary leading-relaxed">
-                        {rev.comment}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-text-muted">
-                    Ainda não há avaliações cadastradas.
+                    Nenhum serviço cadastrado ainda.
                   </p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Coluna Lateral (CTA de Contato & Horários) */}
+          {/* Coluna Lateral */}
           <div className="lg:col-span-4 space-y-5 sticky top-24">
-            {/* Box de Ação Rápida */}
             <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-4">
               <h3 className="font-heading font-semibold text-base text-text-primary">
                 Falar com o estabelecimento
@@ -541,55 +444,6 @@ Aguardando confirmação!`;
                   <MessageCircle className="h-4 w-4" />
                   Agendar pelo WhatsApp
                 </button>
-
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-                    data.address,
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full bg-surface-input hover:bg-surface-border border border-surface-border text-text-primary font-medium py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
-                >
-                  <Navigation className="h-4 w-4 text-brand-primary" />
-                  Como Chegar (GPS)
-                </a>
-              </div>
-
-              <div className="pt-4 border-t border-surface-border text-xs text-text-secondary space-y-2">
-                <div className="flex items-center gap-2">
-                  <Phone className="h-3.5 w-3.5 text-text-muted" />
-                  <span>{data.whatsapp}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Horários de Funcionamento Reais */}
-            <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-3">
-              <h3 className="font-heading font-semibold text-sm text-text-primary flex items-center gap-2">
-                <Clock className="h-4 w-4 text-brand-primary" />
-                Horários de Atendimento
-              </h3>
-
-              <div className="space-y-2 text-xs pt-1">
-                {data.schedules && data.schedules.length > 0 ? (
-                  data.schedules.map((sc) => (
-                    <div
-                      key={sc.id}
-                      className="flex items-center justify-between text-text-secondary border-b border-surface-border/50 pb-1.5 last:border-0"
-                    >
-                      <span>{dayNames[sc.dayOfWeek]}</span>
-                      <span className="font-medium text-text-primary">
-                        {sc.isOpen
-                          ? `${sc.openTime} - ${sc.closeTime}`
-                          : "Fechado"}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-text-muted">
-                    Horários não informados.
-                  </p>
-                )}
               </div>
             </div>
           </div>
@@ -600,7 +454,6 @@ Aguardando confirmação!`;
       {isBookingOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface-card border border-surface-border rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-5 p-6 relative">
-            {/* Header Modal */}
             <div className="flex items-center justify-between border-b border-surface-border pb-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-brand-accent" />
@@ -649,7 +502,7 @@ Aguardando confirmação!`;
                 2. Selecione os Serviços
               </label>
               <div className="space-y-2">
-                {data.services &&
+                {data.services && data.services.length > 0 ? (
                   data.services.map((s) => {
                     const isSelected = selectedServices.includes(s.id);
                     return (
@@ -658,7 +511,7 @@ Aguardando confirmação!`;
                         onClick={() => toggleServiceSelection(s.id)}
                         className={`p-3 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${
                           isSelected
-                            ? "border-brand-accent bg-brand-accent/10 text-text-primary"
+                            ? "border-brand-accent bg-brand-accent/10 text-text-primary font-semibold"
                             : "border-surface-border bg-surface-input text-text-secondary hover:text-text-primary"
                         }`}
                       >
@@ -677,11 +530,16 @@ Aguardando confirmação!`;
                           <span className="font-medium">{s.name}</span>
                         </div>
                         <span className="font-semibold text-text-primary">
-                          R$ {s.price.toFixed(2).replace(".", ",")}
+                          R$ {Number(s.price).toFixed(2).replace(".", ",")}
                         </span>
                       </div>
                     );
-                  })}
+                  })
+                ) : (
+                  <p className="text-xs text-text-muted py-2">
+                    Este lava-jato ainda não cadastrou serviços no sistema.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -734,7 +592,7 @@ Aguardando confirmação!`;
 
               <button
                 type="button"
-                disabled={selectedServices.length === 0}
+                disabled={selectedServicesList.length === 0}
                 onClick={handleConfirmBookingWhatsApp}
                 className="w-full bg-brand-accent hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
               >

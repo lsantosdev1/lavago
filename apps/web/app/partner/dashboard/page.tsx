@@ -7,17 +7,16 @@ import {
   Sparkles,
   Calendar,
   Clock,
-  Settings,
   Power,
   LogOut,
   Loader2,
-  CheckCircle2,
-  AlertCircle,
-  Car,
-  DollarSign,
   Building2,
+  Plus,
+  Sparkle,
+  X,
+  CheckCircle2,
 } from "lucide-react";
-import { getPartnerBookings } from "@/lib/api";
+import { getPartnerBookings, createService } from "@/lib/api";
 
 interface Schedule {
   id: string;
@@ -25,6 +24,14 @@ interface Schedule {
   openTime: string;
   closeTime: string;
   isOpen: boolean;
+}
+
+interface Service {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  duration: string;
 }
 
 interface Booking {
@@ -58,12 +65,19 @@ export default function PartnerDashboardPage() {
   const [partnerData, setPartnerData] = useState<any>(null);
   const [carWash, setCarWash] = useState<any>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [activeTab, setActiveTab] = useState<"bookings" | "schedules">(
-    "bookings",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "bookings" | "services" | "schedules"
+  >("bookings");
   const [isOpenNow, setIsOpenNow] = useState(true);
 
-  // Busca perfil do parceiro logado na API e os agendamentos do estabelecimento
+  // Estado do Modal de Criar Serviço
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+  const [serviceName, setServiceName] = useState("");
+  const [serviceDescription, setServiceDescription] = useState("");
+  const [servicePrice, setServicePrice] = useState("");
+  const [serviceDuration, setServiceDuration] = useState("1h 00min");
+  const [savingService, setSavingService] = useState(false);
+
   useEffect(() => {
     async function loadPartnerProfile() {
       const token = localStorage.getItem("@lavago:token");
@@ -82,7 +96,6 @@ export default function PartnerDashboardPage() {
         const data = await res.json();
         setPartnerData(data);
 
-        // Se o parceiro não possui um lava-jato cadastrado, direciona para a tela de setup
         if (!data.carWash) {
           router.push("/partner/setup");
           return;
@@ -91,7 +104,6 @@ export default function PartnerDashboardPage() {
         setCarWash(data.carWash);
         setIsOpenNow(data.carWash.isOpen);
 
-        // Busca a lista de agendamentos reais do banco PostgreSQL
         const bookingsData = await getPartnerBookings(token);
         setBookings(bookingsData);
       } catch (err) {
@@ -112,9 +124,39 @@ export default function PartnerDashboardPage() {
     router.push("/login");
   };
 
-  const toggleStoreStatus = () => {
-    setIsOpenNow((prev) => !prev);
-    // Aqui enviaremos a requisição PATCH para a API futuramente
+  const handleAddService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingService(true);
+
+    const token = localStorage.getItem("@lavago:token");
+    if (!token) return;
+
+    try {
+      const newService = await createService(
+        {
+          name: serviceName,
+          description: serviceDescription,
+          price: servicePrice,
+          duration: serviceDuration,
+        },
+        token,
+      );
+
+      // Atualiza a lista local de serviços
+      setCarWash((prev: any) => ({
+        ...prev,
+        services: [...(prev.services || []), newService],
+      }));
+
+      setServiceName("");
+      setServiceDescription("");
+      setServicePrice("");
+      setIsServiceModalOpen(false);
+    } catch (err: any) {
+      alert(err.message || "Erro ao criar serviço.");
+    } finally {
+      setSavingService(false);
+    }
   };
 
   if (loading) {
@@ -148,9 +190,8 @@ export default function PartnerDashboardPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Toggle Status Aberto/Fechado */}
             <button
-              onClick={toggleStoreStatus}
+              onClick={() => setIsOpenNow((prev) => !prev)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all ${
                 isOpenNow
                   ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
@@ -210,6 +251,17 @@ export default function PartnerDashboardPage() {
             <Calendar className="h-4 w-4" /> Agendamentos ({bookings.length})
           </button>
           <button
+            onClick={() => setActiveTab("services")}
+            className={`px-4 py-2 rounded-xl font-semibold flex items-center gap-2 transition-all ${
+              activeTab === "services"
+                ? "bg-brand-primary text-white shadow-md shadow-brand-primary/20"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            <Sparkle className="h-4 w-4" /> Meus Serviços (
+            {carWash?.services?.length || 0})
+          </button>
+          <button
             onClick={() => setActiveTab("schedules")}
             className={`px-4 py-2 rounded-xl font-semibold flex items-center gap-2 transition-all ${
               activeTab === "schedules"
@@ -217,11 +269,11 @@ export default function PartnerDashboardPage() {
                 : "text-text-secondary hover:text-text-primary"
             }`}
           >
-            <Clock className="h-4 w-4" /> Horários de Atendimento
+            <Clock className="h-4 w-4" /> Horários
           </button>
         </div>
 
-        {/* Conteúdo da Aba: Agendamentos Reais */}
+        {/* Aba: Agendamentos */}
         {activeTab === "bookings" && (
           <div className="space-y-4">
             {bookings.length === 0 ? (
@@ -231,8 +283,7 @@ export default function PartnerDashboardPage() {
                   Nenhum agendamento pendente
                 </h3>
                 <p className="text-xs text-text-secondary max-w-sm mx-auto">
-                  Quando os clientes solicitarem agendamentos pelo aplicativo,
-                  os registros aparecerão organizados nesta lista.
+                  Os agendamentos dos clientes aparecerão aqui.
                 </p>
               </div>
             ) : (
@@ -289,7 +340,63 @@ export default function PartnerDashboardPage() {
           </div>
         )}
 
-        {/* Conteúdo da Aba: Horários */}
+        {/* Aba: Gestão de Serviços */}
+        {activeTab === "services" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-heading font-bold text-base text-text-primary">
+                Serviços Oferecidos
+              </h3>
+              <button
+                onClick={() => setIsServiceModalOpen(true)}
+                className="bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md flex items-center gap-1.5 transition-all"
+              >
+                <Plus className="h-4 w-4" /> Novo Serviço
+              </button>
+            </div>
+
+            {!carWash?.services || carWash.services.length === 0 ? (
+              <div className="bg-surface-card border border-surface-border rounded-2xl p-8 text-center space-y-3">
+                <Sparkle className="h-8 w-8 text-text-muted mx-auto" />
+                <h3 className="font-heading font-semibold text-text-primary text-base">
+                  Nenhum serviço cadastrado
+                </h3>
+                <p className="text-xs text-text-secondary max-w-sm mx-auto">
+                  Cadastre serviços para que seus clientes possam selecioná-los
+                  no agendamento!
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {carWash.services.map((s: Service) => (
+                  <div
+                    key={s.id}
+                    className="bg-surface-card border border-surface-border rounded-2xl p-5 shadow-lg space-y-2"
+                  >
+                    <div className="flex items-start justify-between">
+                      <h4 className="font-heading font-bold text-base text-text-primary">
+                        {s.name}
+                      </h4>
+                      <span className="font-heading font-bold text-base text-brand-accent">
+                        R$ {Number(s.price).toFixed(2).replace(".", ",")}
+                      </span>
+                    </div>
+                    {s.description && (
+                      <p className="text-xs text-text-secondary">
+                        {s.description}
+                      </p>
+                    )}
+                    <span className="inline-block text-[11px] text-text-muted pt-1">
+                      ⏱ Duração: {s.duration}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Aba: Horários */}
         {activeTab === "schedules" && (
           <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-xl space-y-4 max-w-2xl">
             <h3 className="font-heading font-bold text-base text-text-primary">
@@ -315,6 +422,107 @@ export default function PartnerDashboardPage() {
           </div>
         )}
       </main>
+
+      {/* MODAL DE CADASTRAR SERVIÇO */}
+      {isServiceModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface-card border border-surface-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 relative">
+            <div className="flex items-center justify-between border-b border-surface-border pb-3">
+              <h3 className="font-heading font-bold text-base text-text-primary">
+                Novo Serviço
+              </h3>
+              <button
+                onClick={() => setIsServiceModalOpen(false)}
+                className="p-1 text-text-muted hover:text-text-primary rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddService} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">
+                  Nome do Serviço *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={serviceName}
+                  onChange={(e) => setServiceName(e.target.value)}
+                  placeholder="Ex: Lavagem Geral + Cera"
+                  className="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-2 text-text-primary focus:outline-none focus:border-brand-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">
+                  Preço (R$) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={servicePrice}
+                  onChange={(e) => setServicePrice(e.target.value)}
+                  placeholder="Ex: 80.00"
+                  className="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-2 text-text-primary focus:outline-none focus:border-brand-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">
+                  Duração Estimada *
+                </label>
+                <select
+                  value={serviceDuration}
+                  onChange={(e) => setServiceDuration(e.target.value)}
+                  className="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-2 text-text-primary focus:outline-none focus:border-brand-primary"
+                >
+                  <option value="30 min">30 min</option>
+                  <option value="45 min">45 min</option>
+                  <option value="1h 00min">1h 00min</option>
+                  <option value="1h 30min">1h 30min</option>
+                  <option value="2h 00min">2h 00min</option>
+                  <option value="3h 00min+">3h 00min+</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">
+                  Descrição do Serviço
+                </label>
+                <textarea
+                  rows={2}
+                  value={serviceDescription}
+                  onChange={(e) => setServiceDescription(e.target.value)}
+                  placeholder="Ex: Inclui lavagem externa a seco, aspireção e pretinho nos pneus."
+                  className="w-full bg-surface-input border border-surface-border rounded-xl px-3 py-2 text-text-primary focus:outline-none focus:border-brand-primary"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsServiceModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-text-secondary hover:bg-surface-input font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingService}
+                  className="bg-brand-primary hover:bg-brand-hover text-white font-semibold px-4 py-2 rounded-xl shadow-md flex items-center gap-1.5"
+                >
+                  {savingService && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  )}
+                  Salvar Serviço
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

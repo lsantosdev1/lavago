@@ -344,3 +344,42 @@ app.get("/partner/bookings", authMiddleware, async (req: AuthRequest, res) => {
 app.listen(port, () => {
   console.log(`🚀 API LavaGo rodando na porta ${port}`);
 });
+// Cadastrar Novo Serviço para o Lava-Jato do Parceiro Logado
+app.post("/services", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { name, description, price, duration } = req.body;
+
+    if (!name || !price || !duration) {
+      return res
+        .status(400)
+        .json({ error: "Nome, preço e duração são obrigatórios." });
+    }
+
+    // Busca o lava-jato vinculado ao parceiro logado
+    const carWash = await prisma.carWash.findFirst({
+      where: { ownerId: req.user!.id },
+    });
+
+    if (!carWash) {
+      return res
+        .status(404)
+        .json({ error: "Lava-jato não encontrado para este parceiro." });
+    }
+
+    const service = await prisma.service.create({
+      data: {
+        carWashId: carWash.id,
+        name,
+        description,
+        price: parseFloat(price),
+        duration,
+        active: true,
+      },
+    });
+
+    return res.status(201).json(service);
+  } catch (error) {
+    console.error("Erro ao cadastrar serviço:", error);
+    return res.status(500).json({ error: "Erro ao cadastrar serviço." });
+  }
+});
